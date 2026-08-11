@@ -3,7 +3,9 @@ const { chromium: pwChromium } = require('playwright-core');
 
 module.exports = async (req, res) => {
   const URL = req.query.url || 'https://hardware.shopify.com/en-uk/products/payment-marketing-kit-ie-eu-uk';
-  const out = { page_url: URL, action: 'Click Add to cart', requests: [] };
+  const EXPECTED = req.query.expected || 'add_to_cart';
+  const ACTION = 'Click Add to cart';
+  const out = { page_url: URL, action: ACTION, expected: EXPECTED, requests: [] };
   let browser;
   try {
     browser = await pwChromium.launch({
@@ -51,6 +53,29 @@ module.exports = async (req, res) => {
     out.after_b64 = (await page.screenshot({type:'jpeg',quality:55,fullPage:false})).toString('base64');
     const seen = new Set();
     out.requests = out.requests.filter(r => { const k=r.platform+'|'+r.url; if(seen.has(k)) return false; seen.add(k); return true; });
+
+    const expectedLower = String(EXPECTED).toLowerCase();
+    const matchedRequests = out.requests.filter(r => r.url.toLowerCase().includes(expectedLower));
+    const dataLayerText = JSON.stringify(out.dataLayer_after || []).toLowerCase();
+    const observedInDataLayer = dataLayerText.includes(expectedLower);
+    const observed = matchedRequests.length > 0 || observedInDataLayer;
+    const status = !clicked ? 'UNKNOWN' : observed ? 'PASS' : 'FAIL';
+
+    out.audit = {
+      Target: URL,
+      Action: ACTION,
+      Expected: EXPECTED,
+      Observed: observed ? EXPECTED : 'Not observed',
+      Status: status,
+      Evidence: {
+        action_completed: clicked,
+        matched_requests: matchedRequests,
+        observed_in_dataLayer: observedInDataLayer,
+        before_screenshot_captured: Boolean(out.before_b64),
+        after_screenshot_captured: Boolean(out.after_b64)
+      }
+    };
+
     res.status(200).json(out);
   } catch (e) {
     out.error = String(e && e.stack || e);
