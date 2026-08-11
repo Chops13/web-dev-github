@@ -1,0 +1,4 @@
+{
+  "functions": {"api/probe.js": {"maxDuration": 60}},
+  "rewrites": [{"source":"/","destination":"/api/probe"}]
+}
