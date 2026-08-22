@@ -5,14 +5,31 @@ module.exports = async (req, res) => {
   const URL = req.query.url || 'https://hardware.shopify.com/en-uk/products/payment-marketing-kit-ie-eu-uk';
   const EXPECTED = req.query.expected || 'add_to_cart';
   const ACTION = 'Click Add to cart';
+  const STREAM = String(req.query.stream || '').toLowerCase() === 'true' || String(req.headers.accept || '').includes('application/x-ndjson');
   const out = { page_url: URL, action: ACTION, expected: EXPECTED, requests: [] };
   let browser;
+
+  if (STREAM) {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+  }
+
+  const emit = (type, payload = {}) => {
+    if (!STREAM || res.writableEnded) return;
+    res.write(JSON.stringify({ type, ...payload }) + '\n');
+  };
+
   try {
     browser = await pwChromium.launch({
       args: chromium.args,
       executablePath: await chromium.executablePath(),
       headless: true,
     });
+    emit('milestone', { step: 'browser_started' });
+
     const page = await browser.newPage({ viewport: { width: 1365, height: 900 } });
     page.on('request', req2 => {
       const u = req2.url();
@@ -24,8 +41,11 @@ module.exports = async (req, res) => {
       else if (ul.includes('px.ads.linkedin.com') || ul.includes('snap.licdn.com')) platform='LinkedIn';
       if (platform) out.requests.push({ platform, method: req2.method(), url: u });
     });
+
     const resp = await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     out.http_status = resp ? resp.status() : null;
+    emit('milestone', { step: 'page_loaded' });
+
     await page.waitForTimeout(4000);
     for (const pat of ['Accept all','Accept All','Allow all','Allow All','I agree']) {
       try {
@@ -33,26 +53,43 @@ module.exports = async (req, res) => {
         if (await loc.count() && await loc.isVisible()) { await loc.click({timeout:3000}); await page.waitForTimeout(1000); out.consent_action=pat; break; }
       } catch {}
     }
+
     out.title = await page.title();
     out.dataLayer_before = await page.evaluate(() => typeof dataLayer !== 'undefined' ? dataLayer : null).catch(()=>null);
     out.before_b64 = (await page.screenshot({type:'jpeg',quality:55,fullPage:false})).toString('base64');
+    emit('milestone', { step: 'baseline_captured' });
+
     const candidates = [page.locator('button[name="add"]'), page.locator('button').filter({hasText:/add to cart/i}), page.locator('input[type="submit"][value*="Add"]')];
     let clicked=false;
+    let actionAttempted=false;
     for (const loc of candidates) {
       try {
         if (await loc.count() && await loc.first().isVisible()) {
           out.clicked_text = await loc.first().innerText().catch(()=>null) || await loc.first().getAttribute('value');
-          await loc.first().click({timeout:5000}); clicked=true; break;
+          actionAttempted = true;
+          try {
+            await loc.first().click({timeout:5000});
+            clicked=true;
+          } finally {
+            emit('milestone', { step: 'action_attempted' });
+          }
+          break;
         }
       } catch (e) { (out.click_errors ||= []).push(String(e).slice(0,180)); }
     }
     out.clicked=clicked;
+    if (!actionAttempted) out.action_attempted = false;
+
     await page.waitForTimeout(5000);
     out.dataLayer_after = await page.evaluate(() => typeof dataLayer !== 'undefined' ? dataLayer : null).catch(()=>null);
     out.final_url = page.url();
     out.after_b64 = (await page.screenshot({type:'jpeg',quality:55,fullPage:false})).toString('base64');
     const seen = new Set();
     out.requests = out.requests.filter(r => { const k=r.platform+'|'+r.url; if(seen.has(k)) return false; seen.add(k); return true; });
+
+    if (out.requests.length > 0 || Array.isArray(out.dataLayer_after)) {
+      emit('milestone', { step: 'evidence_captured' });
+    }
 
     const expectedLower = String(EXPECTED).toLowerCase();
     const matchedRequests = out.requests.filter(r => r.url.toLowerCase().includes(expectedLower));
@@ -76,9 +113,21 @@ module.exports = async (req, res) => {
       }
     };
 
-    res.status(200).json(out);
+    if (STREAM) {
+      emit('complete', { payload: out });
+      res.end();
+    } else {
+      res.status(200).json(out);
+    }
   } catch (e) {
     out.error = String(e && e.stack || e);
-    res.status(500).json(out);
-  } finally { if (browser) await browser.close(); }
+    if (STREAM) {
+      emit('error', { payload: out });
+      res.end();
+    } else {
+      res.status(500).json(out);
+    }
+  } finally {
+    if (browser) await browser.close();
+  }
 };
