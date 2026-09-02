@@ -1,0 +1,52 @@
+name: Nexus MCP Hermes Discovery
+
+on:
+  push:
+    branches:
+      - nexus-mcp-skeleton
+    paths:
+      - "nexus-mcp/**"
+      - ".github/workflows/nexus-mcp-hermes-discovery.yml"
+
+jobs:
+  hermes-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify raw MCP surface
+        run: python3 nexus-mcp/smoke_test.py
+
+      - name: Install Hermes Agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+          HERMES_BIN="$(find "$HOME/.hermes" -type f -name hermes -perm -u+x 2>/dev/null | head -n 1 || true)"
+          if [ -z "$HERMES_BIN" ]; then
+            HERMES_BIN="$(command -v hermes || true)"
+          fi
+          test -n "$HERMES_BIN"
+          echo "$(dirname "$HERMES_BIN")" >> "$GITHUB_PATH"
+          "$HERMES_BIN" --help >/dev/null
+
+      - name: Register Nexus MCP with Hermes
+        shell: bash
+        run: |
+          set -euo pipefail
+          hermes mcp remove nexus >/dev/null 2>&1 || true
+          hermes mcp add nexus --command python3 --args "$GITHUB_WORKSPACE/nexus-mcp/server.py"
+
+      - name: Assert Hermes discovers exactly five Nexus tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          hermes mcp test nexus 2>&1 | tee /tmp/hermes-mcp-test.txt
+          grep -Eq 'Tools discovered:[[:space:]]*5([^0-9]|$)' /tmp/hermes-mcp-test.txt
+          if grep -Eq 'Tools discovered:[[:space:]]*([0-4]|[6-9]|[1-9][0-9]+)([^0-9]|$)' /tmp/hermes-mcp-test.txt; then
+            echo "Hermes discovered a tool count other than 5"
+            exit 1
+          fi
+          echo "PASS: Hermes discovered exactly 5/5 Nexus tools"
