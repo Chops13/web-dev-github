@@ -25,7 +25,15 @@ listed=rpc({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})
 names=[tool["name"] for tool in listed["result"]["tools"]]
 assert names==EXPECTED,f"Expected {EXPECTED}, got {names}"
 assert len(names)==5
-for i,name in enumerate(EXPECTED,start=10):
+
+called=rpc({"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"inspect_campaign","arguments":{"run_id":"fixture-agentic-v0"}}})
+inspect=called["result"]["structuredContent"]
+assert inspect["stub"] is False
+assert inspect["status"]=="OK"
+assert inspect["read_only"] is True
+assert inspect["counts"]=={"source_rows":6,"campaigns":1,"audiences":2,"creatives":4,"activations":6}
+
+for i,name in enumerate(EXPECTED[1:],start=11):
     args={"run_id":"demo-run"}
     if name=="resolve_mapping":
         args.update({"mapping_id":"map-1","candidate_id":"candidate-a"})
@@ -33,6 +41,7 @@ for i,name in enumerate(EXPECTED,start=10):
     assert called["result"]["structuredContent"]["stub"] is True
     assert called["result"]["structuredContent"]["tool"]==name
 print("PASS: MCP discovery surface is exactly 5/5 tools")
-print("PASS: all 5 stub tools return structured JSON")
+print("PASS: inspect_campaign returns frozen read-only counts 6/1/2/4/6")
+print("PASS: remaining 4 tools still return stub JSON")
 p.terminate()
 p.wait(timeout=5)
