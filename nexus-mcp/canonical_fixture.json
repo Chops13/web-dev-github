@@ -1,0 +1,90 @@
+{
+  "fixture_id": "nexus-agentic-v0-canonical-001",
+  "run_id": "fixture-agentic-v0",
+  "source_row_count": 6,
+  "campaign": {
+    "campaign_key": "CMP-NORTHSTAR-Q4-ENT-001",
+    "client": "Northstar Systems",
+    "campaign_name": "Q4 Enterprise Growth",
+    "objective": "Lead Generation",
+    "market": "UK",
+    "platform": "DV360",
+    "currency": "GBP",
+    "flight_start": "2026-10-01",
+    "flight_end": "2026-12-31"
+  },
+  "audiences": [
+    {
+      "audience_row_id": "AUD-001",
+      "audience_name": "Enterprise IT Decision Makers"
+    },
+    {
+      "audience_row_id": "AUD-002",
+      "audience_name": "Technology Leadership Retargeting"
+    }
+  ],
+  "creatives": [
+    {
+      "creative_row_id": "CRT-001",
+      "creative_id": "NS-Q4-300X250-A",
+      "ad_format": "Display",
+      "size": "300x250"
+    },
+    {
+      "creative_row_id": "CRT-002",
+      "creative_id": "NS-Q4-300X600-A",
+      "ad_format": "Display",
+      "size": "300x600"
+    },
+    {
+      "creative_row_id": "CRT-003",
+      "creative_id": "NS-Q4-728X90-A",
+      "ad_format": "Display",
+      "size": "728x90"
+    },
+    {
+      "creative_row_id": "CRT-004",
+      "creative_id": "NS-Q4-1920X1080-A",
+      "ad_format": "Video",
+      "size": "1920x1080"
+    }
+  ],
+  "activations": [
+    {
+      "activation_id": "ACT-001",
+      "plan_row_id": "PLAN-001",
+      "audience_row_id": "AUD-001",
+      "creative_row_id": "CRT-001"
+    },
+    {
+      "activation_id": "ACT-002",
+      "plan_row_id": "PLAN-001",
+      "audience_row_id": "AUD-001",
+      "creative_row_id": "CRT-002"
+    },
+    {
+      "activation_id": "ACT-003",
+      "plan_row_id": "PLAN-002",
+      "audience_row_id": "AUD-001",
+      "creative_row_id": "CRT-003"
+    },
+    {
+      "activation_id": "ACT-004",
+      "plan_row_id": "PLAN-003",
+      "audience_row_id": "AUD-002",
+      "creative_row_id": "CRT-001"
+    },
+    {
+      "activation_id": "ACT-005",
+      "plan_row_id": "PLAN-004",
+      "audience_row_id": "AUD-002",
+      "creative_row_id": "CRT-003"
+    },
+    {
+      "activation_id": "ACT-006",
+      "plan_row_id": "PLAN-005",
+      "audience_row_id": "AUD-002",
+      "creative_row_id": "CRT-004"
+    }
+  ]
+}
