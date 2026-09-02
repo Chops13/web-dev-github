@@ -16,7 +16,7 @@ on:
 
 jobs:
   hermes-discovery:
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     timeout-minutes: 10
     steps:
       - name: Checkout
