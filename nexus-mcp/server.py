@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 import json
 import sys
+from pathlib import Path
 
 SERVER_NAME = "nexus-agentic-compile"
-SERVER_VERSION = "0.0.1"
+SERVER_VERSION = "0.0.2"
 PROTOCOL_VERSION = "2025-06-18"
+FIXTURE_PATH = Path(__file__).with_name("canonical_fixture.json")
 
 TOOLS = [
-    {"name":"inspect_campaign","description":"Read the canonical Nexus Campaign, Audience, Creative, and Activation entities for one run. Read-only stub.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
+    {"name":"inspect_campaign","description":"Read the frozen canonical Nexus Campaign, Audience, Creative, and Activation entities for one fixture run. Read-only.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"resolve_mapping","description":"Select one deterministic candidate for an already-surfaced mapping ambiguity. Stub only; cannot invent source values.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1},"mapping_id":{"type":"string","minLength":1},"candidate_id":{"type":"string","minLength":1}},"required":["run_id","mapping_id","candidate_id"],"additionalProperties":False}},
     {"name":"request_compile","description":"Request deterministic Nexus compilation for a run. Stub only; no compiler logic is executed.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"run_qa","description":"Request deterministic Nexus QA for a run. Stub only; no QA logic is executed.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
@@ -32,6 +34,41 @@ def stub_call(name, arguments):
         payload.update({"mapping_id":arguments.get("mapping_id"),"candidate_id":arguments.get("candidate_id")})
     return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":False}
 
+def inspect_campaign(arguments):
+    with FIXTURE_PATH.open("r", encoding="utf-8") as handle:
+        fixture = json.load(handle)
+    requested_run_id = arguments.get("run_id")
+    if requested_run_id != fixture["run_id"]:
+        payload={
+            "stub":False,
+            "tool":"inspect_campaign",
+            "status":"NOT_FOUND",
+            "run_id":requested_run_id,
+            "fixture_id":fixture["fixture_id"],
+            "message":"inspect_campaign is currently frozen to one canonical fixture run."
+        }
+        return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":True}
+    payload={
+        "stub":False,
+        "tool":"inspect_campaign",
+        "status":"OK",
+        "read_only":True,
+        "fixture_id":fixture["fixture_id"],
+        "run_id":fixture["run_id"],
+        "counts":{
+            "source_rows":fixture["source_row_count"],
+            "campaigns":1,
+            "audiences":len(fixture["audiences"]),
+            "creatives":len(fixture["creatives"]),
+            "activations":len(fixture["activations"])
+        },
+        "campaign":fixture["campaign"],
+        "audiences":fixture["audiences"],
+        "creatives":fixture["creatives"],
+        "activations":fixture["activations"]
+    }
+    return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":False}
+
 def handle(msg):
     method=msg.get("method")
     req_id=msg.get("id")
@@ -54,7 +91,10 @@ def handle(msg):
         if name not in TOOL_NAMES:
             error(req_id,-32602,f"Unknown tool: {name}")
             return
-        result(req_id,stub_call(name,args))
+        if name=="inspect_campaign":
+            result(req_id,inspect_campaign(args))
+        else:
+            result(req_id,stub_call(name,args))
         return
     if req_id is not None:
         error(req_id,-32601,f"Method not found: {method}")
