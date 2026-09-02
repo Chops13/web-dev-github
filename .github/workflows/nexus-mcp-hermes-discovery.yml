@@ -1,9 +1,9 @@
 name: Nexus MCP Hermes Discovery
 
 on:
-  push:
+  pull_request:
     branches:
-      - nexus-mcp-skeleton
+      - main
     paths:
       - "nexus-mcp/**"
       - ".github/workflows/nexus-mcp-hermes-discovery.yml"
