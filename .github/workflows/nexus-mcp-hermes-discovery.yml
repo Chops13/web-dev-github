@@ -1,6 +1,12 @@
 name: Nexus MCP Hermes Discovery
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "nexus-mcp/**"
+      - ".github/workflows/nexus-mcp-hermes-discovery.yml"
   pull_request:
     branches:
       - main
