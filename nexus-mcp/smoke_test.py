@@ -33,15 +33,30 @@ assert inspect["status"]=="OK"
 assert inspect["read_only"] is True
 assert inspect["counts"]=={"source_rows":6,"campaigns":1,"audiences":2,"creatives":4,"activations":6}
 
-for i,name in enumerate(EXPECTED[1:],start=11):
-    args={"run_id":"demo-run"}
-    if name=="resolve_mapping":
-        args.update({"mapping_id":"map-1","candidate_id":"candidate-a"})
-    called=rpc({"jsonrpc":"2.0","id":i,"method":"tools/call","params":{"name":name,"arguments":args}})
+called=rpc({"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"resolve_mapping","arguments":{"run_id":"fixture-agentic-v0","mapping_id":"MAP-AUD-001","candidate_id":"candidate-a"}}})
+resolved=called["result"]["structuredContent"]
+assert called["result"]["isError"] is False
+assert resolved["stub"] is False
+assert resolved["status"]=="RESOLVED"
+assert resolved["selected_candidate"]["candidate_id"]=="candidate-a"
+assert resolved["selected_candidate"]["value"]=="AUD-001"
+assert resolved["allowed_candidate_ids"]==["candidate-a","candidate-b"]
+
+called=rpc({"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"resolve_mapping","arguments":{"run_id":"fixture-agentic-v0","mapping_id":"MAP-AUD-001","candidate_id":"candidate-c"}}})
+rejected=called["result"]["structuredContent"]
+assert called["result"]["isError"] is True
+assert rejected["status"]=="REJECTED"
+assert rejected["allowed_candidate_ids"]==["candidate-a","candidate-b"]
+assert "selected_candidate" not in rejected
+
+for i,name in enumerate(EXPECTED[2:],start=13):
+    called=rpc({"jsonrpc":"2.0","id":i,"method":"tools/call","params":{"name":name,"arguments":{"run_id":"demo-run"}}})
     assert called["result"]["structuredContent"]["stub"] is True
     assert called["result"]["structuredContent"]["tool"]==name
 print("PASS: MCP discovery surface is exactly 5/5 tools")
 print("PASS: inspect_campaign returns frozen read-only counts 6/1/2/4/6")
-print("PASS: remaining 4 tools still return stub JSON")
+print("PASS: resolve_mapping accepts candidate-a from the 2-candidate frozen set")
+print("PASS: resolve_mapping rejects invented candidate-c and selects no value")
+print("PASS: remaining 3 tools still return stub JSON")
 p.terminate()
 p.wait(timeout=5)
