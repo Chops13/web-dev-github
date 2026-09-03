@@ -1,0 +1,15 @@
+{
+  "fixture_id": "nexus-agentic-v0-qa-001",
+  "run_id": "fixture-agentic-v0",
+  "checks": [
+    {
+      "check_id": "QA-CREATIVE-SIZE-001",
+      "severity": "BLOCKING",
+      "entity_type": "creative",
+      "creative_row_id": "CRT-004",
+      "field": "size",
+      "expected": "1920x1920",
+      "message": "Frozen demo video creative must be 1920x1920."
+    }
+  ]
+}
