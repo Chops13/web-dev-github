@@ -49,14 +49,35 @@ assert rejected["status"]=="REJECTED"
 assert rejected["allowed_candidate_ids"]==["candidate-a","candidate-b"]
 assert "selected_candidate" not in rejected
 
-for i,name in enumerate(EXPECTED[2:],start=13):
-    called=rpc({"jsonrpc":"2.0","id":i,"method":"tools/call","params":{"name":name,"arguments":{"run_id":"demo-run"}}})
+first=rpc({"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"request_compile","arguments":{"run_id":"fixture-agentic-v0"}}})["result"]["structuredContent"]
+second=rpc({"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"request_compile","arguments":{"run_id":"fixture-agentic-v0"}}})["result"]["structuredContent"]
+assert first==second
+assert first["stub"] is False
+assert first["status"]=="COMPILED_PREVIEW"
+assert first["read_only"] is True
+assert first["in_memory"] is True
+assert first["writes_files"] is False
+assert first["counts"]=={"build_rows":6}
+assert first["stable_ids"]=={
+    "campaign_key":"CMP-NORTHSTAR-Q4-ENT-001",
+    "activation_ids":["ACT-001","ACT-002","ACT-003","ACT-004","ACT-005","ACT-006"],
+    "build_row_ids":["BLD-ACT-001","BLD-ACT-002","BLD-ACT-003","BLD-ACT-004","BLD-ACT-005","BLD-ACT-006"]
+}
+assert [row["plan_row_id"] for row in first["build_rows"]].count("PLAN-001")==2
+assert first["build_rows"][0]["creative_id"]=="NS-Q4-300X250-A"
+assert first["build_rows"][-1]["creative_id"]=="NS-Q4-1920X1080-A"
+
+for i,name in enumerate(("run_qa","prepare_package"),start=15):
+    called=rpc({"jsonrpc":"2.0","id":i,"method":"tools/call","params":{"name":name,"arguments":{"run_id":"fixture-agentic-v0"}}})
     assert called["result"]["structuredContent"]["stub"] is True
     assert called["result"]["structuredContent"]["tool"]==name
+
 print("PASS: MCP discovery surface is exactly 5/5 tools")
 print("PASS: inspect_campaign returns frozen read-only counts 6/1/2/4/6")
-print("PASS: resolve_mapping accepts candidate-a from the 2-candidate frozen set")
-print("PASS: resolve_mapping rejects invented candidate-c and selects no value")
-print("PASS: remaining 3 tools still return stub JSON")
+print("PASS: resolve_mapping remains constrained to the frozen 2-candidate set")
+print("PASS: request_compile deterministically returns 6 in-memory build rows")
+print("PASS: stable IDs are identical across repeated compile calls")
+print("PASS: PLAN-001 preserves 1:N as two build rows")
+print("PASS: run_qa and prepare_package remain stubs")
 p.terminate()
 p.wait(timeout=5)
