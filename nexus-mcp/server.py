@@ -4,13 +4,14 @@ import sys
 from pathlib import Path
 
 SERVER_NAME = "nexus-agentic-compile"
-SERVER_VERSION = "0.0.2"
+SERVER_VERSION = "0.0.3"
 PROTOCOL_VERSION = "2025-06-18"
 FIXTURE_PATH = Path(__file__).with_name("canonical_fixture.json")
+MAPPING_FIXTURE_PATH = Path(__file__).with_name("mapping_fixture.json")
 
 TOOLS = [
     {"name":"inspect_campaign","description":"Read the frozen canonical Nexus Campaign, Audience, Creative, and Activation entities for one fixture run. Read-only.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
-    {"name":"resolve_mapping","description":"Select one deterministic candidate for an already-surfaced mapping ambiguity. Stub only; cannot invent source values.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1},"mapping_id":{"type":"string","minLength":1},"candidate_id":{"type":"string","minLength":1}},"required":["run_id","mapping_id","candidate_id"],"additionalProperties":False}},
+    {"name":"resolve_mapping","description":"Select exactly one candidate from one frozen deterministic mapping ambiguity. Rejects values not present in the candidate set.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1},"mapping_id":{"type":"string","minLength":1},"candidate_id":{"type":"string","minLength":1}},"required":["run_id","mapping_id","candidate_id"],"additionalProperties":False}},
     {"name":"request_compile","description":"Request deterministic Nexus compilation for a run. Stub only; no compiler logic is executed.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"run_qa","description":"Request deterministic Nexus QA for a run. Stub only; no QA logic is executed.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"prepare_package","description":"Prepare final Nexus run artefacts after deterministic QA PASS. Stub only; creates nothing and publishes nowhere.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}}
@@ -28,11 +29,12 @@ def result(req_id, value):
 def error(req_id, code, message):
     send({"jsonrpc":"2.0","id":req_id,"error":{"code":code,"message":message}})
 
+def tool_result(payload, is_error=False):
+    return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":is_error}
+
 def stub_call(name, arguments):
     payload={"stub":True,"tool":name,"status":"STUB","run_id":arguments.get("run_id"),"message":"Nexus MCP skeleton only. No compiler logic executed."}
-    if name=="resolve_mapping":
-        payload.update({"mapping_id":arguments.get("mapping_id"),"candidate_id":arguments.get("candidate_id")})
-    return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":False}
+    return tool_result(payload)
 
 def inspect_campaign(arguments):
     with FIXTURE_PATH.open("r", encoding="utf-8") as handle:
@@ -47,7 +49,7 @@ def inspect_campaign(arguments):
             "fixture_id":fixture["fixture_id"],
             "message":"inspect_campaign is currently frozen to one canonical fixture run."
         }
-        return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":True}
+        return tool_result(payload, True)
     payload={
         "stub":False,
         "tool":"inspect_campaign",
@@ -67,7 +69,50 @@ def inspect_campaign(arguments):
         "creatives":fixture["creatives"],
         "activations":fixture["activations"]
     }
-    return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":False}
+    return tool_result(payload)
+
+def resolve_mapping(arguments):
+    with MAPPING_FIXTURE_PATH.open("r", encoding="utf-8") as handle:
+        fixture = json.load(handle)
+    requested_run_id = arguments.get("run_id")
+    requested_mapping_id = arguments.get("mapping_id")
+    requested_candidate_id = arguments.get("candidate_id")
+    if requested_run_id != fixture["run_id"] or requested_mapping_id != fixture["mapping_id"]:
+        payload={
+            "stub":False,
+            "tool":"resolve_mapping",
+            "status":"NOT_FOUND",
+            "run_id":requested_run_id,
+            "mapping_id":requested_mapping_id,
+            "fixture_id":fixture["fixture_id"],
+            "message":"resolve_mapping is currently frozen to one deterministic ambiguity."
+        }
+        return tool_result(payload, True)
+    candidates = fixture["candidates"]
+    selected = next((candidate for candidate in candidates if candidate["candidate_id"] == requested_candidate_id), None)
+    if selected is None:
+        payload={
+            "stub":False,
+            "tool":"resolve_mapping",
+            "status":"REJECTED",
+            "run_id":fixture["run_id"],
+            "mapping_id":fixture["mapping_id"],
+            "candidate_id":requested_candidate_id,
+            "allowed_candidate_ids":[candidate["candidate_id"] for candidate in candidates],
+            "message":"Candidate is not in the frozen deterministic candidate set; no value was selected."
+        }
+        return tool_result(payload, True)
+    payload={
+        "stub":False,
+        "tool":"resolve_mapping",
+        "status":"RESOLVED",
+        "run_id":fixture["run_id"],
+        "mapping_id":fixture["mapping_id"],
+        "source":fixture["ambiguity"],
+        "selected_candidate":selected,
+        "allowed_candidate_ids":[candidate["candidate_id"] for candidate in candidates]
+    }
+    return tool_result(payload)
 
 def handle(msg):
     method=msg.get("method")
@@ -93,6 +138,8 @@ def handle(msg):
             return
         if name=="inspect_campaign":
             result(req_id,inspect_campaign(args))
+        elif name=="resolve_mapping":
+            result(req_id,resolve_mapping(args))
         else:
             result(req_id,stub_call(name,args))
         return
