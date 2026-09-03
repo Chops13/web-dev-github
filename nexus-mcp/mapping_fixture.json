@@ -1,0 +1,25 @@
+{
+  "fixture_id": "nexus-agentic-v0-mapping-001",
+  "run_id": "fixture-agentic-v0",
+  "mapping_id": "MAP-AUD-001",
+  "ambiguity": {
+    "field": "audience_row_id",
+    "source_value": "IT decision makers",
+    "source_ref": "PLAN-001",
+    "message": "Source wording can map only to one of the two frozen Nexus audience candidates."
+  },
+  "candidates": [
+    {
+      "candidate_id": "candidate-a",
+      "value": "AUD-001",
+      "label": "Enterprise IT Decision Makers",
+      "evidence": "Canonical audience name contains both IT and Decision Makers."
+    },
+    {
+      "candidate_id": "candidate-b",
+      "value": "AUD-002",
+      "label": "Technology Leadership Retargeting",
+      "evidence": "Canonical audience is technology leadership but is explicitly retargeting."
+    }
+  ]
+}
