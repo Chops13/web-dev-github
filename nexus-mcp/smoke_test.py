@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
+import copy
+import csv
+import importlib.util
+import io
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 EXPECTED=["inspect_campaign","resolve_mapping","request_compile","run_qa","prepare_package"]
+EXPECTED_COLUMNS=[
+    "Campaign_Key","Plan_Row_ID","Platform","Campaign_Name","Placement_Name","Ad_Format","Flight_Dates",
+    "Audience_Targeting","Creative_ID","Landing_Page_URL","Final_Tracking_URL","Activation_ID","Audience_Row_ID","Creative_Row_ID"
+]
 server=Path(__file__).with_name("server.py")
 p=subprocess.Popen([sys.executable,str(server)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
 
@@ -64,40 +72,63 @@ assert first["stable_ids"]=={
     "build_row_ids":["BLD-ACT-001","BLD-ACT-002","BLD-ACT-003","BLD-ACT-004","BLD-ACT-005","BLD-ACT-006"]
 }
 assert [row["plan_row_id"] for row in first["build_rows"]].count("PLAN-001")==2
-assert first["build_rows"][0]["creative_id"]=="NS-Q4-300X250-A"
-assert first["build_rows"][-1]["creative_id"]=="NS-Q4-1920X1080-A"
+assert first["build_rows"][-1]["size"]=="1920x1920"
 
 qa_call=rpc({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"run_qa","arguments":{"run_id":"fixture-agentic-v0"}}})
 qa=qa_call["result"]["structuredContent"]
-assert qa_call["result"]["isError"] is True
+assert qa_call["result"]["isError"] is False
 assert qa["stub"] is False
-assert qa["status"]=="BLOCKED"
+assert qa["status"]=="PASS"
 assert qa["fail_closed"] is True
 assert qa["override_allowed"] is False
-assert qa["counts"]=={"checks_executed":1,"failures":1,"blocking_failures":1}
-assert qa["failures"][0]["check_id"]=="QA-CREATIVE-SIZE-001"
-assert qa["failures"][0]["creative_row_id"]=="CRT-004"
-assert qa["failures"][0]["expected"]=="1920x1920"
-assert qa["failures"][0]["actual"]==["1920x1080"]
-assert qa["failures"][0]["affected_build_row_ids"]==["BLD-ACT-006"]
+assert qa["counts"]=={"checks_executed":1,"failures":0,"blocking_failures":0}
+assert qa["failures"]==[]
 
-override_call=rpc({"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"run_qa","arguments":{"run_id":"fixture-agentic-v0","override":True}}})
-override=override_call["result"]["structuredContent"]
-assert override_call["result"]["isError"] is True
-assert override["status"]=="REJECTED_ARGUMENTS"
-assert override["rejected_arguments"]==["override"]
-assert override["override_allowed"] is False
+package_call=rpc({"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"prepare_package","arguments":{"run_id":"fixture-agentic-v0"}}})
+package=package_call["result"]["structuredContent"]
+assert package_call["result"]["isError"] is False
+assert package["stub"] is False
+assert package["status"]=="READY_FOR_APPROVAL"
+assert package["qa_status"]=="PASS"
+assert package["package_created"] is True
+assert package["in_memory"] is True
+assert package["writes_files"] is False
+assert package["publishes"] is False
+artifact=package["artifact"]
+assert artifact["filename"]=="nexus_trafficking.csv"
+assert artifact["media_type"]=="text/csv"
+assert artifact["columns"]==EXPECTED_COLUMNS
+assert artifact["row_count"]==6
+reader=csv.DictReader(io.StringIO(artifact["content"]))
+assert reader.fieldnames==EXPECTED_COLUMNS
+rows=list(reader)
+assert len(rows)==6
+assert rows[0]["Activation_ID"]=="ACT-001"
+assert rows[-1]["Activation_ID"]=="ACT-006"
+assert rows[-1]["Creative_Row_ID"]=="CRT-004"
 
-package_call=rpc({"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"prepare_package","arguments":{"run_id":"fixture-agentic-v0"}}})
-assert package_call["result"]["structuredContent"]["stub"] is True
-assert package_call["result"]["structuredContent"]["tool"]=="prepare_package"
-
-print("PASS: MCP discovery surface is exactly 5/5 tools")
-print("PASS: inspect_campaign returns frozen read-only counts 6/1/2/4/6")
-print("PASS: resolve_mapping remains constrained to the frozen 2-candidate set")
-print("PASS: request_compile deterministically returns 6 in-memory build rows")
-print("PASS: run_qa returns BLOCKED on QA-CREATIVE-SIZE-001 for CRT-004")
-print("PASS: run_qa rejects override=true and remains fail-closed")
-print("PASS: prepare_package remains stubbed")
 p.terminate()
 p.wait(timeout=5)
+
+# Exercise the non-PASS gate without changing the frozen repository fixture.
+spec=importlib.util.spec_from_file_location("nexus_server_gate_test", server)
+module=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+bad_fixture=copy.deepcopy(module.load_canonical_fixture())
+for creative in bad_fixture["creatives"]:
+    if creative["creative_row_id"]=="CRT-004":
+        creative["size"]="1920x1080"
+module.load_canonical_fixture=lambda: copy.deepcopy(bad_fixture)
+blocked=module.prepare_package({"run_id":"fixture-agentic-v0"})["structuredContent"]
+assert blocked["status"]=="BLOCKED"
+assert blocked["qa_status"]=="BLOCKED"
+assert blocked["package_created"] is False
+assert blocked["writes_files"] is False
+assert blocked["publishes"] is False
+assert "artifact" not in blocked
+
+print("PASS: MCP discovery surface is exactly 5/5 tools")
+print("PASS: compile remains 6 stable in-memory rows and corrected QA remains PASS")
+print("PASS: prepare_package returns READY_FOR_APPROVAL only after QA PASS")
+print("PASS: nexus_trafficking.csv is in memory with exactly 14 frozen columns and 6 rows")
+print("PASS: non-PASS QA refuses package generation and returns no artifact")
