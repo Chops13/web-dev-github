@@ -67,17 +67,37 @@ assert [row["plan_row_id"] for row in first["build_rows"]].count("PLAN-001")==2
 assert first["build_rows"][0]["creative_id"]=="NS-Q4-300X250-A"
 assert first["build_rows"][-1]["creative_id"]=="NS-Q4-1920X1080-A"
 
-for i,name in enumerate(("run_qa","prepare_package"),start=15):
-    called=rpc({"jsonrpc":"2.0","id":i,"method":"tools/call","params":{"name":name,"arguments":{"run_id":"fixture-agentic-v0"}}})
-    assert called["result"]["structuredContent"]["stub"] is True
-    assert called["result"]["structuredContent"]["tool"]==name
+qa_call=rpc({"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"run_qa","arguments":{"run_id":"fixture-agentic-v0"}}})
+qa=qa_call["result"]["structuredContent"]
+assert qa_call["result"]["isError"] is True
+assert qa["stub"] is False
+assert qa["status"]=="BLOCKED"
+assert qa["fail_closed"] is True
+assert qa["override_allowed"] is False
+assert qa["counts"]=={"checks_executed":1,"failures":1,"blocking_failures":1}
+assert qa["failures"][0]["check_id"]=="QA-CREATIVE-SIZE-001"
+assert qa["failures"][0]["creative_row_id"]=="CRT-004"
+assert qa["failures"][0]["expected"]=="1920x1920"
+assert qa["failures"][0]["actual"]==["1920x1080"]
+assert qa["failures"][0]["affected_build_row_ids"]==["BLD-ACT-006"]
+
+override_call=rpc({"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"run_qa","arguments":{"run_id":"fixture-agentic-v0","override":True}}})
+override=override_call["result"]["structuredContent"]
+assert override_call["result"]["isError"] is True
+assert override["status"]=="REJECTED_ARGUMENTS"
+assert override["rejected_arguments"]==["override"]
+assert override["override_allowed"] is False
+
+package_call=rpc({"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"prepare_package","arguments":{"run_id":"fixture-agentic-v0"}}})
+assert package_call["result"]["structuredContent"]["stub"] is True
+assert package_call["result"]["structuredContent"]["tool"]=="prepare_package"
 
 print("PASS: MCP discovery surface is exactly 5/5 tools")
 print("PASS: inspect_campaign returns frozen read-only counts 6/1/2/4/6")
 print("PASS: resolve_mapping remains constrained to the frozen 2-candidate set")
 print("PASS: request_compile deterministically returns 6 in-memory build rows")
-print("PASS: stable IDs are identical across repeated compile calls")
-print("PASS: PLAN-001 preserves 1:N as two build rows")
-print("PASS: run_qa and prepare_package remain stubs")
+print("PASS: run_qa returns BLOCKED on QA-CREATIVE-SIZE-001 for CRT-004")
+print("PASS: run_qa rejects override=true and remains fail-closed")
+print("PASS: prepare_package remains stubbed")
 p.terminate()
 p.wait(timeout=5)
