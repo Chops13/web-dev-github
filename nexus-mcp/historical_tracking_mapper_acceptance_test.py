@@ -9,13 +9,13 @@ from historical_tracking_mapper import INPUT_HEADERS, map_tracking_rows
 def _row(platform: str, ad_name: str, width: int, height: int, fmt: str, placement: str) -> list:
     row = [None] * 44
     row[:14] = [
-        "https://events.kpmg.uk/webApp/kpmgSingleEventRegistration?eventId=85579308",
+        "https://example.test/landing",
         placement,
         True,
         platform,
         2024,
         "Tech",
-        "Tech Innovators 2024",
+        "Campaign Innovators 2024",
         "UK",
         "All devices",
         fmt,
@@ -25,14 +25,14 @@ def _row(platform: str, ad_name: str, width: int, height: int, fmt: str, placeme
         True,
     ]
     row[15] = "Traffic"
-    row[16] = "Tech Innovation 2024"
+    row[16] = "Campaign Innovation 2024"
     row[19] = "Q3 24"
     row[22] = "Bespoke Tech Audience"
-    row[23] = f"UK | Traffic | Tech Innovation 2024 | {fmt} | All devices | Bespoke Tech Audience | Tech Innovators 2024"
+    row[23] = f"UK | Traffic | Campaign Innovation 2024 | {fmt} | All devices | Bespoke Tech Audience | Campaign Innovators 2024"
     row[34] = ad_name.replace(" | ", "_")
     row[41] = "utm_medium=test&utm_source=test"
     row[42] = "?utm_medium=test&utm_source=test&cid=test"
-    row[43] = row[0] + "&utm_medium=test&utm_source=test&cid=test"
+    row[43] = row[0] + "?utm_medium=test&utm_source=test&cid=test"
     return row
 
 
@@ -40,16 +40,16 @@ def main() -> None:
     rows = [[None] * 44, INPUT_HEADERS + [None] * 30]
     for final in (1, 2):
         for width, height in ((160, 600), (300, 250), (728, 90), (970, 250)):
-            rows.append(_row("Adobe DSP", f"KPMG | UK | Brand | Tech Innovators 2024 | Q3-24 | Display |Adobe-DSP | {width}x{height} | Finals {final}", width, height, "Standard Display", "display ad"))
-    rows.append(_row("Linkedin", "Tech Innovation 2024 | Retargeting | LinkedIn | Final Social 1 | Static Image", 1920, 1080, "Image", "social media"))
-    rows.append(_row("Linkedin", "Tech Innovation 2024 | Retargeting | LinkedIn | Final Social 2 | Static Image", 1920, 1080, "Image", "social media"))
-    rows.append(_row("Facebook", "Tech Innovation 2024 | Retargeting | Facebook | Facebook 1 | Static Image", 1920, 1080, "Image", "social media"))
-    duplicate = _row("Facebook", "Tech Innovation 2024 | Retargeting | Facebook | Facebook 2 | Static Image", 1920, 1080, "Image", "social media")
+            rows.append(_row("Adobe DSP", f"Example | UK | Brand | Campaign Innovators 2024 | Q3-24 | Display | Adobe-DSP | {width}x{height} | Finals {final}", width, height, "Standard Display", "display ad"))
+    rows.append(_row("Linkedin", "Campaign Innovation 2024 | Retargeting | LinkedIn | Final Social 1 | Static Image", 1920, 1080, "Image", "social media"))
+    rows.append(_row("Linkedin", "Campaign Innovation 2024 | Retargeting | LinkedIn | Final Social 2 | Static Image", 1920, 1080, "Image", "social media"))
+    rows.append(_row("Facebook", "Campaign Innovation 2024 | Retargeting | Facebook | Facebook 1 | Static Image", 1920, 1080, "Image", "social media"))
+    duplicate = _row("Facebook", "Campaign Innovation 2024 | Retargeting | Facebook | Facebook 2 | Static Image", 1920, 1080, "Image", "social media")
     rows.append(duplicate)
     rows.append(deepcopy(duplicate))
 
     before = deepcopy(rows)
-    result = map_tracking_rows(rows, "KPMG - Trafficking Sheet - Tech Innovation Q3 2024.xlsx")
+    result = map_tracking_rows(rows, "historical_tracking_fixture.xlsx")
 
     assert result["mapper_status"] == "NEEDS_CONFIRMATION"
     assert result["compiler_allowed"] is False
@@ -68,7 +68,7 @@ def main() -> None:
     assert campaign["market"] == "UK"
     assert campaign["campaign_period"] == "Q3 24"
     assert campaign["campaign_name"] is None
-    assert campaign["campaign_name_candidates"] == ["Tech Innovation 2024", "Tech Innovators 2024"]
+    assert campaign["campaign_name_candidates"] == ["Campaign Innovation 2024", "Campaign Innovators 2024"]
     assert campaign["platform"] is None
     assert campaign["platform_candidates"] == ["Adobe DSP", "Facebook", "Linkedin"]
     assert campaign["client"] is None and campaign["currency"] is None
@@ -84,10 +84,10 @@ def main() -> None:
     assert result["validation_issues"][0]["blocking"] is True
     assert rows == before
 
-    print("PASS: 13 historical source rows preserved read-only with exact row evidence")
+    print("PASS: 13 source rows preserved read-only with exact row evidence")
     print("PASS: 1 campaign / 1 audience / 12 creative / 13 activation candidates emitted")
     print("PASS: missing/conflicting campaign facts block compilation without invention")
-    print("PASS: duplicate Facebook rows 14/15 retained and flagged as blocking")
+    print("PASS: duplicate source rows 14/15 retained and flagged as blocking")
 
 
 if __name__ == "__main__":
