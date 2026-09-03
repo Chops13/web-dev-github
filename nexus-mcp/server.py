@@ -4,16 +4,17 @@ import sys
 from pathlib import Path
 
 SERVER_NAME = "nexus-agentic-compile"
-SERVER_VERSION = "0.0.4"
+SERVER_VERSION = "0.0.5"
 PROTOCOL_VERSION = "2025-06-18"
 FIXTURE_PATH = Path(__file__).with_name("canonical_fixture.json")
 MAPPING_FIXTURE_PATH = Path(__file__).with_name("mapping_fixture.json")
+QA_FIXTURE_PATH = Path(__file__).with_name("qa_fixture.json")
 
 TOOLS = [
     {"name":"inspect_campaign","description":"Read the frozen canonical Nexus Campaign, Audience, Creative, and Activation entities for one fixture run. Read-only.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"resolve_mapping","description":"Select exactly one candidate from one frozen deterministic mapping ambiguity. Rejects values not present in the candidate set.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1},"mapping_id":{"type":"string","minLength":1},"candidate_id":{"type":"string","minLength":1}},"required":["run_id","mapping_id","candidate_id"],"additionalProperties":False}},
     {"name":"request_compile","description":"Produce a deterministic in-memory compile preview for the frozen canonical fixture. Creates stable build rows only; writes no files.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
-    {"name":"run_qa","description":"Request deterministic Nexus QA for a run. Stub only; no QA logic is executed.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
+    {"name":"run_qa","description":"Run deterministic fail-closed QA over the frozen compiled preview. Returns BLOCKED on any blocking failure and accepts no override arguments.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"prepare_package","description":"Prepare final Nexus run artefacts after deterministic QA PASS. Stub only; creates nothing and publishes nowhere.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}}
 ]
 
@@ -33,7 +34,7 @@ def tool_result(payload, is_error=False):
     return {"content":[{"type":"text","text":json.dumps(payload,separators=(",",":"))}],"structuredContent":payload,"isError":is_error}
 
 def stub_call(name, arguments):
-    payload={"stub":True,"tool":name,"status":"STUB","run_id":arguments.get("run_id"),"message":"Nexus MCP skeleton only. No compiler logic executed."}
+    payload={"stub":True,"tool":name,"status":"STUB","run_id":arguments.get("run_id"),"message":"Nexus MCP skeleton only. This tool remains intentionally stubbed."}
     return tool_result(payload)
 
 def load_canonical_fixture():
@@ -175,6 +176,85 @@ def request_compile(arguments):
     }
     return tool_result(payload)
 
+def run_qa(arguments):
+    allowed_keys = {"run_id"}
+    extra_keys = sorted(set(arguments) - allowed_keys)
+    if extra_keys:
+        payload={
+            "stub":False,
+            "tool":"run_qa",
+            "status":"REJECTED_ARGUMENTS",
+            "run_id":arguments.get("run_id"),
+            "rejected_arguments":extra_keys,
+            "override_allowed":False,
+            "message":"run_qa accepts only run_id; QA status cannot be overridden by the agent."
+        }
+        return tool_result(payload, True)
+
+    with QA_FIXTURE_PATH.open("r", encoding="utf-8") as handle:
+        qa_fixture = json.load(handle)
+    requested_run_id = arguments.get("run_id")
+    if requested_run_id != qa_fixture["run_id"]:
+        payload={
+            "stub":False,
+            "tool":"run_qa",
+            "status":"NOT_FOUND",
+            "run_id":requested_run_id,
+            "fixture_id":qa_fixture["fixture_id"],
+            "message":"run_qa is currently frozen to one canonical fixture run."
+        }
+        return tool_result(payload, True)
+
+    compiled = request_compile({"run_id": requested_run_id})["structuredContent"]
+    rows_by_creative = {}
+    for row in compiled["build_rows"]:
+        rows_by_creative.setdefault(row["creative_row_id"], []).append(row)
+
+    failures = []
+    checks_executed = []
+    for check in qa_fixture["checks"]:
+        matches = rows_by_creative.get(check["creative_row_id"], [])
+        actual_values = sorted({row.get(check["field"]) for row in matches})
+        passed = len(matches) > 0 and actual_values == [check["expected"]]
+        checks_executed.append({
+            "check_id":check["check_id"],
+            "severity":check["severity"],
+            "passed":passed
+        })
+        if not passed:
+            failures.append({
+                "check_id":check["check_id"],
+                "severity":check["severity"],
+                "entity_type":check["entity_type"],
+                "creative_row_id":check["creative_row_id"],
+                "field":check["field"],
+                "expected":check["expected"],
+                "actual":actual_values,
+                "affected_build_row_ids":[row["build_row_id"] for row in matches],
+                "message":check["message"]
+            })
+
+    blocking_failures = [item for item in failures if item["severity"] == "BLOCKING"]
+    status = "BLOCKED" if blocking_failures else "PASS"
+    payload={
+        "stub":False,
+        "tool":"run_qa",
+        "status":status,
+        "fail_closed":True,
+        "override_allowed":False,
+        "run_id":requested_run_id,
+        "fixture_id":qa_fixture["fixture_id"],
+        "compiled_preview_status":compiled["status"],
+        "counts":{
+            "checks_executed":len(checks_executed),
+            "failures":len(failures),
+            "blocking_failures":len(blocking_failures)
+        },
+        "checks":checks_executed,
+        "failures":failures
+    }
+    return tool_result(payload, bool(blocking_failures))
+
 def handle(msg):
     method=msg.get("method")
     req_id=msg.get("id")
@@ -203,6 +283,8 @@ def handle(msg):
             result(req_id,resolve_mapping(args))
         elif name=="request_compile":
             result(req_id,request_compile(args))
+        elif name=="run_qa":
+            result(req_id,run_qa(args))
         else:
             result(req_id,stub_call(name,args))
         return
