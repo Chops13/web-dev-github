@@ -1,21 +1,40 @@
 #!/usr/bin/env python3
+import csv
+import io
 import json
 import sys
 from pathlib import Path
 
 SERVER_NAME = "nexus-agentic-compile"
-SERVER_VERSION = "0.0.5"
+SERVER_VERSION = "0.0.6"
 PROTOCOL_VERSION = "2025-06-18"
 FIXTURE_PATH = Path(__file__).with_name("canonical_fixture.json")
 MAPPING_FIXTURE_PATH = Path(__file__).with_name("mapping_fixture.json")
 QA_FIXTURE_PATH = Path(__file__).with_name("qa_fixture.json")
+
+TRAFFICKING_COLUMNS = [
+    "Campaign_Key",
+    "Plan_Row_ID",
+    "Platform",
+    "Campaign_Name",
+    "Placement_Name",
+    "Ad_Format",
+    "Flight_Dates",
+    "Audience_Targeting",
+    "Creative_ID",
+    "Landing_Page_URL",
+    "Final_Tracking_URL",
+    "Activation_ID",
+    "Audience_Row_ID",
+    "Creative_Row_ID",
+]
 
 TOOLS = [
     {"name":"inspect_campaign","description":"Read the frozen canonical Nexus Campaign, Audience, Creative, and Activation entities for one fixture run. Read-only.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"resolve_mapping","description":"Select exactly one candidate from one frozen deterministic mapping ambiguity. Rejects values not present in the candidate set.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1},"mapping_id":{"type":"string","minLength":1},"candidate_id":{"type":"string","minLength":1}},"required":["run_id","mapping_id","candidate_id"],"additionalProperties":False}},
     {"name":"request_compile","description":"Produce a deterministic in-memory compile preview for the frozen canonical fixture. Creates stable build rows only; writes no files.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
     {"name":"run_qa","description":"Run deterministic fail-closed QA over the frozen compiled preview. Returns BLOCKED on any blocking failure and accepts no override arguments.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}},
-    {"name":"prepare_package","description":"Prepare final Nexus run artefacts after deterministic QA PASS. Stub only; creates nothing and publishes nowhere.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}}
+    {"name":"prepare_package","description":"After deterministic QA PASS, produce the frozen 14-column nexus_trafficking.csv in memory. Refuses non-PASS runs and never publishes.","inputSchema":{"type":"object","properties":{"run_id":{"type":"string","minLength":1}},"required":["run_id"],"additionalProperties":False}}
 ]
 
 TOOL_NAMES = {tool["name"] for tool in TOOLS}
@@ -255,6 +274,66 @@ def run_qa(arguments):
     }
     return tool_result(payload, bool(blocking_failures))
 
+def prepare_package(arguments):
+    requested_run_id = arguments.get("run_id")
+    qa = run_qa({"run_id": requested_run_id})["structuredContent"]
+    if qa.get("status") != "PASS":
+        payload={
+            "stub":False,
+            "tool":"prepare_package",
+            "status":"BLOCKED",
+            "run_id":requested_run_id,
+            "qa_status":qa.get("status"),
+            "package_created":False,
+            "writes_files":False,
+            "publishes":False,
+            "message":"Package generation requires deterministic QA PASS."
+        }
+        return tool_result(payload, True)
+
+    compiled = request_compile({"run_id": requested_run_id})["structuredContent"]
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=TRAFFICKING_COLUMNS, lineterminator="\n")
+    writer.writeheader()
+    for row in compiled["build_rows"]:
+        writer.writerow({
+            "Campaign_Key":row["campaign_key"],
+            "Plan_Row_ID":row["plan_row_id"],
+            "Platform":row["platform"],
+            "Campaign_Name":row["campaign_name"],
+            "Placement_Name":"",
+            "Ad_Format":row["ad_format"],
+            "Flight_Dates":f"{row['flight_start']} to {row['flight_end']}",
+            "Audience_Targeting":row["audience_name"],
+            "Creative_ID":row["creative_id"],
+            "Landing_Page_URL":"",
+            "Final_Tracking_URL":"",
+            "Activation_ID":row["activation_id"],
+            "Audience_Row_ID":row["audience_row_id"],
+            "Creative_Row_ID":row["creative_row_id"]
+        })
+    csv_content = output.getvalue()
+
+    payload={
+        "stub":False,
+        "tool":"prepare_package",
+        "status":"READY_FOR_APPROVAL",
+        "run_id":requested_run_id,
+        "qa_status":"PASS",
+        "package_created":True,
+        "in_memory":True,
+        "writes_files":False,
+        "publishes":False,
+        "artifact":{
+            "filename":"nexus_trafficking.csv",
+            "media_type":"text/csv",
+            "columns":TRAFFICKING_COLUMNS,
+            "row_count":len(compiled["build_rows"]),
+            "content":csv_content
+        }
+    }
+    return tool_result(payload)
+
 def handle(msg):
     method=msg.get("method")
     req_id=msg.get("id")
@@ -286,7 +365,7 @@ def handle(msg):
         elif name=="run_qa":
             result(req_id,run_qa(args))
         else:
-            result(req_id,stub_call(name,args))
+            result(req_id,prepare_package(args))
         return
     if req_id is not None:
         error(req_id,-32601,f"Method not found: {method}")
