@@ -3,7 +3,7 @@ import { Confirmations, FixtureMode, MockNexusClient, QaResult, ReviewResult, TR
 import './styles.css';
 
 type Stage = 'upload'|'review'|'confirm'|'compile'|'qa';
-const initial: Confirmations = {client:'',currency:'GBP',flightStart:'2024-07-01',flightEnd:'2024-09-30',campaignName:'',keepSourceRow:''};
+const initial: Confirmations = {client:'',currency:'',flightStart:'',flightEnd:'',campaignName:'',keepSourceRow:''};
 
 export default function App() {
   const [mode,setMode] = useState<FixtureMode>('success');
