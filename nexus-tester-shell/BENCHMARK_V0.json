@@ -1,0 +1,31 @@
+{
+  "benchmark_id": "nexus-adobe-historical-v0",
+  "status": "FROZEN",
+  "scope": "controlled historical Adobe DSP replay",
+  "source_rows": 13,
+  "adobe_dsp_rows": 8,
+  "human_confirmations": 6,
+  "confirmations": [
+    "campaign.client",
+    "campaign.currency",
+    "campaign.flight_start",
+    "campaign.flight_end",
+    "campaign.campaign_name",
+    "duplicate_source_row_retention"
+  ],
+  "compiled_activations": 8,
+  "operator_facing_fields_compared": 72,
+  "operator_facing_fields_matched": 72,
+  "qa_status": "PASS",
+  "qa_blockers": 0,
+  "package_status": "READY_FOR_APPROVAL",
+  "output_rows": 8,
+  "output_columns": 14,
+  "controlled_manual_replay_seconds": 48.80,
+  "nexus_deterministic_replay_seconds": 0.064,
+  "claim_limitations": [
+    "The timing replay was controlled and assistant-operated, not a timed human programmatic-operator study.",
+    "Do not advertise the mechanical speed ratio as a human productivity claim.",
+    "Human operator time saving remains unproven until an external timed replay is completed."
+  ]
+}
