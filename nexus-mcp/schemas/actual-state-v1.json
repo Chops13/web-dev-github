@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nexus-actual-state-v1",
+  "title": "Nexus Actual State v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "actual_state_id", "platform", "adapter_version", "account_context_id", "captured_at", "objects", "completeness"],
+  "properties": {
+    "schema_version": {"const": "nexus-actual-state-v1"},
+    "actual_state_id": {"type": "string", "minLength": 1},
+    "platform": {"type": "string", "minLength": 1},
+    "adapter_version": {"type": "string", "minLength": 1},
+    "account_context_id": {"type": "string", "minLength": 1},
+    "captured_at": {"type": "string", "minLength": 1},
+    "completeness": {"enum": ["COMPLETE", "PARTIAL", "READ_ERROR"]},
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["platform_object_id", "platform_object_type", "nexus_binding", "values", "relationships"],
+        "properties": {
+          "platform_object_id": {"type": "string", "minLength": 1},
+          "platform_object_type": {"type": "string", "minLength": 1},
+          "nexus_binding": {"type": ["string", "null"]},
+          "values": {"type": "object"},
+          "relationships": {"type": "array", "items": {"type": "object"}},
+          "status": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "read_failures": {"type": "array", "items": {"type": "object"}},
+    "raw_snapshot_reference": {"type": ["string", "null"]}
+  }
+}
