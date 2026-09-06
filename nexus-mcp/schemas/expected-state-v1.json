@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nexus-expected-state-v1",
+  "title": "Nexus Expected State v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "expected_state_id", "graph_revision_id", "graph_hash", "platform", "adapter_version", "account_context_id", "status", "objects"],
+  "properties": {
+    "schema_version": {"const": "nexus-expected-state-v1"},
+    "expected_state_id": {"type": "string", "minLength": 1},
+    "graph_revision_id": {"type": "string", "minLength": 1},
+    "graph_hash": {"type": "string", "minLength": 1},
+    "platform": {"type": "string", "minLength": 1},
+    "adapter_version": {"type": "string", "minLength": 1},
+    "account_context_id": {"type": "string", "minLength": 1},
+    "generated_at": {"type": ["string", "null"]},
+    "status": {"enum": ["EXPECTED_READY", "BLOCKED"]},
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nexus_entity_id", "platform_object_type", "required", "managed_fields", "relationships"],
+        "properties": {
+          "nexus_entity_id": {"type": "string", "minLength": 1},
+          "platform_object_type": {"type": "string", "minLength": 1},
+          "expected_binding_id": {"type": ["string", "null"]},
+          "required": {"type": "boolean"},
+          "desired_state": {"type": "object"},
+          "managed_fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["canonical_field", "platform_field", "expected", "comparison_mode"],
+              "properties": {
+                "canonical_field": {"type": "string", "minLength": 1},
+                "platform_field": {"type": "string", "minLength": 1},
+                "expected": {},
+                "comparison_mode": {"enum": ["EXACT", "SET_EXACT", "ORDERED_EXACT", "NUMERIC_EXACT", "NUMERIC_TOLERANCE", "SEMANTIC_MAPPING", "EXISTS", "NOT_EXISTS"]},
+                "tolerance": {"type": ["number", "null"]},
+                "origin": {"enum": ["SOURCE", "DETERMINISTIC", "MAPPED", "HUMAN_CONFIRMATION"]}
+              }
+            }
+          },
+          "relationships": {"type": "array", "items": {"type": "object"}},
+          "unmanaged_fields": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}
