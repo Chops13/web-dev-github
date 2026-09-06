@@ -88,15 +88,15 @@ def main() -> None:
     assert match["status"] == "RECONCILED"
     assert {r["state"] for r in match["records"]} == {"MATCH"}
 
-    # 2. £1 equivalent minor-unit drift => deterministic DRIFT, never rounded away.
-    actual_budget_drift = adapter.read_actual("ACCOUNT-001", [actual_object("DSP-100", budget_minor=99999)])
+    # 2. £1 drift in minor units => deterministic DRIFT, never rounded away.
+    actual_budget_drift = adapter.read_actual("ACCOUNT-001", [actual_object("DSP-100", budget_minor=99900)])
     budget_drift = adapter.compare(expected, actual_budget_drift)
     assert budget_drift["status"] == "DRIFTED"
     budget_records = [r for r in budget_drift["records"] if r["state"] == "DRIFT"]
     assert len(budget_records) == 1
     assert budget_records[0]["canonical_field"] == "activation.budget_minor"
     assert budget_records[0]["expected"] == 100000
-    assert budget_records[0]["actual"] == 99999
+    assert budget_records[0]["actual"] == 99900
 
     # 3. Required object absent => deterministic MISSING drift.
     actual_missing = adapter.read_actual("ACCOUNT-001", [])
@@ -121,7 +121,7 @@ def main() -> None:
 
     print("PASS: schemas load")
     print("PASS: exact match -> RECONCILED")
-    print("PASS: 1 minor-unit budget drift -> DRIFTED")
+    print("PASS: £1 budget drift -> DRIFTED")
     print("PASS: missing object -> DRIFTED + CREATE proposal")
     print("PASS: ambiguous binding -> BLOCKED")
     print("PASS: Campaign Graph intent remained immutable")
