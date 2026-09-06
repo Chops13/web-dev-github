@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nexus-drift-v1",
+  "title": "Nexus Drift v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "comparison_id", "expected_state_id", "actual_state_id", "platform", "status", "records"],
+  "properties": {
+    "schema_version": {"const": "nexus-drift-v1"},
+    "comparison_id": {"type": "string", "minLength": 1},
+    "expected_state_id": {"type": "string", "minLength": 1},
+    "actual_state_id": {"type": "string", "minLength": 1},
+    "platform": {"type": "string", "minLength": 1},
+    "status": {"enum": ["RECONCILED", "DRIFTED", "BLOCKED", "UNKNOWN"]},
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["drift_id", "state", "nexus_entity_id", "platform_object_type", "severity", "blocking"],
+        "properties": {
+          "drift_id": {"type": "string", "minLength": 1},
+          "state": {"enum": ["MATCH", "DRIFT", "MISSING", "UNEXPECTED", "AMBIGUOUS_BINDING", "READ_ERROR", "UNSUPPORTED", "UNKNOWN"]},
+          "nexus_entity_id": {"type": ["string", "null"]},
+          "platform_object_id": {"type": ["string", "null"]},
+          "platform_object_type": {"type": "string", "minLength": 1},
+          "canonical_field": {"type": ["string", "null"]},
+          "platform_field": {"type": ["string", "null"]},
+          "expected": {},
+          "actual": {},
+          "comparison_rule": {"type": ["string", "null"]},
+          "severity": {"enum": ["INFO", "WARNING", "CRITICAL", "EXECUTION_BLOCKER"]},
+          "blocking": {"type": "boolean"},
+          "detail": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}
