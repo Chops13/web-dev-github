@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Synthetic/read-only DV360 control-plane slice for Nexus v1.
+"""Read-only DV360 control-plane slice for Nexus v1.
 
 Composes the already-approved pieces:
-Expected State -> DV360ActualStateAdapter -> DV360ExpectedVsActualComparator
--> compact operator health summary.
+Expected State -> DV360ReadTransport -> DV360ActualStateAdapter
+-> DV360ExpectedVsActualComparator -> compact operator health summary.
 
-No networking, OAuth, credentials, writes, or reconciliation actions exist here.
+No OAuth, credentials, writes, or reconciliation actions exist here.
+Networking remains outside this slice; the current accepted transport is frozen/fake.
 """
 from __future__ import annotations
 
@@ -15,15 +16,19 @@ from typing import Any
 
 from dv360_actual_state_adapter import DV360ActualStateAdapter
 from dv360_expected_actual_comparator import DV360ExpectedVsActualComparator
+from dv360_read_transport import DV360ReadTransport
 
 
 class DV360ReadOnlyControlPlaneSlice:
-    """Compose read-only DV360 Actual State and deterministic drift into operator feedback."""
+    """Compose read-only DV360 retrieval, Actual State, drift and operator feedback."""
 
     slice_version = "dv360-read-only-control-plane-v1"
     platform = "DV360"
 
-    def __init__(self) -> None:
+    def __init__(self, *, transport: DV360ReadTransport) -> None:
+        if not isinstance(transport, DV360ReadTransport):
+            raise TypeError("transport must implement DV360ReadTransport")
+        self.transport = transport
         self.actual_adapter = DV360ActualStateAdapter()
         self.comparator = DV360ExpectedVsActualComparator()
 
@@ -91,33 +96,23 @@ class DV360ReadOnlyControlPlaneSlice:
             ],
         }
 
-    def run(
-        self,
-        *,
-        expected_state: dict[str, Any],
-        responses: dict[str, list[dict[str, Any]]],
-        bindings: dict[str, dict[str, str]],
-        captured_at: str,
-        pagination_complete: dict[str, bool] | None = None,
-        raw_snapshot_reference: str | None = None,
-    ) -> dict[str, Any]:
-        """Run one deterministic read-only control-plane cycle from supplied DV360-shaped responses."""
+    def run(self, *, expected_state: dict[str, Any]) -> dict[str, Any]:
+        """Run one deterministic read-only control-plane cycle through the transport boundary."""
         expected = copy.deepcopy(expected_state)
-        supplied_responses = copy.deepcopy(responses)
-        supplied_bindings = copy.deepcopy(bindings)
 
         if expected.get("schema_version") != "nexus-expected-state-v1":
             raise ValueError("expected_state must use nexus-expected-state-v1")
         if expected.get("platform") != self.platform:
             raise ValueError("DV360 control-plane slice accepts DV360 Expected State only")
 
+        snapshot = self.transport.read(account_context_id=expected["account_context_id"])
         actual = self.actual_adapter.read_actual(
             account_context_id=expected["account_context_id"],
-            responses=supplied_responses,
-            bindings=supplied_bindings,
-            captured_at=captured_at,
-            pagination_complete=copy.deepcopy(pagination_complete),
-            raw_snapshot_reference=raw_snapshot_reference,
+            responses=copy.deepcopy(snapshot.responses),
+            bindings=copy.deepcopy(snapshot.bindings),
+            captured_at=snapshot.captured_at,
+            pagination_complete=copy.deepcopy(snapshot.pagination_complete),
+            raw_snapshot_reference=snapshot.raw_snapshot_reference,
         )
         drift = self.comparator.compare(expected, actual)
         health = self._health_summary(expected, actual, drift)
@@ -126,6 +121,7 @@ class DV360ReadOnlyControlPlaneSlice:
             "schema_version": "nexus-dv360-read-only-control-plane-run-v1",
             "platform": self.platform,
             "slice_version": self.slice_version,
+            "transport_version": self.transport.transport_version,
             "expected_state_id": expected["expected_state_id"],
             "actual_state": actual,
             "drift": drift,
