@@ -1,0 +1,180 @@
+{
+  "schema_version": "nexus-platform-capability-v1",
+  "capability_id": "dv360-read-v1",
+  "platform": "DV360",
+  "api_version": "v4",
+  "mode": "READ_ONLY",
+  "writes_allowed": false,
+  "oauth_flow_in_scope": false,
+  "other_platforms_in_scope": false,
+  "principle": "Read Actual State and compare only fields with explicit deterministic semantics. Anything undeclared, unsupported, unreadable, or ambiguously bound must not return MATCH.",
+  "official_reference": {
+    "campaigns": "https://developers.google.com/display-video/api/reference/rest/v4/advertisers.campaigns",
+    "insertion_orders": "https://developers.google.com/display-video/api/reference/rest/v4/advertisers.insertionOrders",
+    "line_items": "https://developers.google.com/display-video/api/reference/rest/v4/advertisers.lineItems",
+    "verified_on": "2026-09-07"
+  },
+  "read_methods": {
+    "campaign": [
+      "GET /v4/advertisers/{advertiserId}/campaigns/{campaignId}",
+      "GET /v4/advertisers/{advertiserId}/campaigns"
+    ],
+    "insertion_order": [
+      "GET /v4/advertisers/{advertiserId}/insertionOrders/{insertionOrderId}",
+      "GET /v4/advertisers/{advertiserId}/insertionOrders"
+    ],
+    "line_item": [
+      "GET /v4/advertisers/{advertiserId}/lineItems/{lineItemId}",
+      "GET /v4/advertisers/{advertiserId}/lineItems"
+    ]
+  },
+  "resources": {
+    "campaign": {
+      "object_type": "CAMPAIGN",
+      "binding": {
+        "platform_id_field": "campaignId",
+        "context_fields": ["advertiserId"],
+        "parent_fields": []
+      },
+      "comparable_fields": [
+        {"path": "displayName", "comparison": "EXACT"},
+        {"path": "entityStatus", "comparison": "EXACT"},
+        {"path": "campaignGoal.campaignGoalType", "comparison": "EXACT"},
+        {"path": "campaignGoal.performanceGoal.performanceGoalType", "comparison": "EXACT"},
+        {"path": "campaignGoal.performanceGoal.performanceGoalAmountMicros", "comparison": "NUMERIC_EXACT", "conditional": "when present for the selected performanceGoalType"},
+        {"path": "campaignGoal.performanceGoal.performanceGoalPercentageMicros", "comparison": "NUMERIC_EXACT", "conditional": "when present for the selected performanceGoalType"},
+        {"path": "campaignGoal.performanceGoal.performanceGoalString", "comparison": "EXACT", "conditional": "when present for the selected performanceGoalType"},
+        {"path": "campaignFlight.plannedSpendAmountMicros", "comparison": "NUMERIC_EXACT"},
+        {"path": "campaignFlight.plannedDates.startDate", "comparison": "EXACT"},
+        {"path": "campaignFlight.plannedDates.endDate", "comparison": "EXACT", "nullable": true}
+      ],
+      "nested_collections": {
+        "campaignBudgets": {
+          "match_rule": "PLATFORM_BINDING_EXACT",
+          "platform_id_field": "budgetId",
+          "on_zero_match": "MISSING",
+          "on_multiple_match": "AMBIGUOUS_BINDING",
+          "comparable_fields": [
+            {"path": "displayName", "comparison": "EXACT"},
+            {"path": "budgetUnit", "comparison": "EXACT"},
+            {"path": "budgetAmountMicros", "comparison": "NUMERIC_EXACT"},
+            {"path": "dateRange.startDate", "comparison": "EXACT"},
+            {"path": "dateRange.endDate", "comparison": "EXACT"},
+            {"path": "externalBudgetSource", "comparison": "EXACT"},
+            {"path": "externalBudgetId", "comparison": "EXACT", "nullable": true}
+          ]
+        }
+      },
+      "observe_only_fields": ["name", "updateTime"],
+      "deferred_fields": [
+        "frequencyCap",
+        "campaignBudgets[].invoiceGroupingId",
+        "campaignBudgets[].prismaConfig"
+      ]
+    },
+    "insertion_order": {
+      "object_type": "INSERTION_ORDER",
+      "binding": {
+        "platform_id_field": "insertionOrderId",
+        "context_fields": ["advertiserId"],
+        "parent_fields": ["campaignId"]
+      },
+      "comparable_fields": [
+        {"path": "campaignId", "comparison": "EXACT_RELATIONSHIP"},
+        {"path": "displayName", "comparison": "EXACT"},
+        {"path": "insertionOrderType", "comparison": "EXACT"},
+        {"path": "entityStatus", "comparison": "EXACT"},
+        {"path": "optimizationObjective", "comparison": "EXACT"},
+        {"path": "kpi.kpiType", "comparison": "EXACT"},
+        {"path": "kpi.kpiAmountMicros", "comparison": "NUMERIC_EXACT", "conditional": "when present for the selected kpiType"},
+        {"path": "kpi.kpiPercentageMicros", "comparison": "NUMERIC_EXACT", "conditional": "when present for the selected kpiType"},
+        {"path": "kpi.kpiString", "comparison": "EXACT", "conditional": "when present for the selected kpiType"},
+        {"path": "budget.budgetUnit", "comparison": "EXACT"},
+        {"path": "budget.automationType", "comparison": "EXACT"}
+      ],
+      "nested_collections": {
+        "budget.budgetSegments": {
+          "match_rule": "COMPOSITE_EXACT",
+          "match_key": ["campaignBudgetId", "dateRange.startDate", "dateRange.endDate"],
+          "on_zero_match": "MISSING",
+          "on_multiple_match": "AMBIGUOUS_BINDING",
+          "comparable_fields": [
+            {"path": "campaignBudgetId", "comparison": "EXACT_RELATIONSHIP", "nullable": true},
+            {"path": "dateRange.startDate", "comparison": "EXACT"},
+            {"path": "dateRange.endDate", "comparison": "EXACT"},
+            {"path": "budgetAmountMicros", "comparison": "NUMERIC_EXACT"}
+          ]
+        }
+      },
+      "observe_only_fields": ["name", "updateTime", "reservationType"],
+      "deferred_fields": [
+        "partnerCosts",
+        "pacing",
+        "frequencyCap",
+        "integrationDetails",
+        "bidStrategy"
+      ]
+    },
+    "line_item": {
+      "object_type": "LINE_ITEM",
+      "binding": {
+        "platform_id_field": "lineItemId",
+        "context_fields": ["advertiserId"],
+        "parent_fields": ["campaignId", "insertionOrderId"]
+      },
+      "comparable_fields": [
+        {"path": "campaignId", "comparison": "EXACT_RELATIONSHIP"},
+        {"path": "insertionOrderId", "comparison": "EXACT_RELATIONSHIP"},
+        {"path": "displayName", "comparison": "EXACT"},
+        {"path": "lineItemType", "comparison": "EXACT"},
+        {"path": "entityStatus", "comparison": "EXACT"},
+        {"path": "flight.flightDateType", "comparison": "EXACT"},
+        {"path": "flight.dateRange.startDate", "comparison": "EXACT", "conditional": "when flightDateType is CUSTOM; otherwise compare resolved inherited state separately"},
+        {"path": "flight.dateRange.endDate", "comparison": "EXACT", "conditional": "when flightDateType is CUSTOM; otherwise compare resolved inherited state separately"},
+        {"path": "budget.budgetAllocationType", "comparison": "EXACT"},
+        {"path": "budget.budgetUnit", "comparison": "EXACT"},
+        {"path": "budget.maxAmount", "comparison": "NUMERIC_EXACT", "conditional": "compare according to budgetUnit semantics"},
+        {"path": "creativeIds", "comparison": "SET_EXACT"},
+        {"path": "excludeNewExchanges", "comparison": "EXACT"},
+        {"path": "containsEuPoliticalAds", "comparison": "EXACT"},
+        {"path": "optimizeFixedBidding", "comparison": "EXACT", "conditional": "only applicable to FIXED_BID line items"}
+      ],
+      "observe_only_fields": [
+        "name",
+        "updateTime",
+        "warningMessages",
+        "reservationType"
+      ],
+      "deferred_fields": [
+        "partnerCosts",
+        "pacing",
+        "frequencyCap",
+        "partnerRevenueModel",
+        "conversionCounting",
+        "bidStrategy",
+        "integrationDetails",
+        "targetingExpansion",
+        "mobileApp",
+        "youtubeAndPartnersSettings",
+        "demandGenSettings"
+      ]
+    }
+  },
+  "fail_closed_rules": [
+    "No platform binding for an Expected object => MISSING or UNKNOWN, never MATCH.",
+    "More than one Actual object claims one Nexus identity => AMBIGUOUS_BINDING and BLOCKED.",
+    "A field absent from comparable_fields is not eligible to produce MATCH.",
+    "A deferred field required by approved Intent keeps the object/platform state BLOCKED until a deterministic comparison rule exists.",
+    "Read failure or incomplete pagination keeps Actual State UNKNOWN/BLOCKED.",
+    "Output-only telemetry such as updateTime and warningMessages may inform operator feedback but cannot redefine Intent."
+  ],
+  "explicitly_out_of_scope": [
+    "OAuth setup or credential acquisition",
+    "POST, PATCH, DELETE, bulkUpdate, bulkEdit or any other write method",
+    "Targeting option reads or targeting taxonomy",
+    "Creative resource reads beyond lineItem.creativeIds bindings",
+    "Floodlight or CM360 reads",
+    "Amazon DSP, The Trade Desk, Adobe DSP or any other platform",
+    "Automatic reconciliation"
+  ]
+}
